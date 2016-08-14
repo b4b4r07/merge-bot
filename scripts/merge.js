@@ -106,6 +106,31 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
             return;
         }
 
+        // Diff
+        var request = require('request');
+        var options = {
+            url: pr.diff_url,
+        };
+        request.get(options, function (error, response, body) {
+            if (!error && response.statusCode == 200) {
+                var messageObj = {
+                    token: SLACK_TOKEN,
+                    content: body,
+                    filetype: 'diff',
+                    filename: sprintf('diff-%d.txt', pr.number),
+                    title: pr.title,
+                    channels: message.channel
+                };
+                bot.api.files.upload(messageObj, function(err, res){
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            } else {
+                console.log('error: '+ response.statusCode);
+            }
+        })
+
         // Merge
         var reply_with_attachments = {
             'text': sprintf('*<%s/files|Diff>*', pr.html_url),
