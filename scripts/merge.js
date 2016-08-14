@@ -108,6 +108,7 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
 
         // Merge
         var reply_with_attachments = {
+            'text': sprintf('*<%s/files|Diff>*', pr.html_url),
             'username': 'P-R',
             'attachments': [
             {
