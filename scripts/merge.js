@@ -48,33 +48,72 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
         number: id
     }, function(err, pr) {
         if (err) {
-            bot.botkit.log('Failed to request of GitHub API:', err);
-            if (err.code == '404') {
+            github.issues.get({
+                user: user,
+                repo: repo,
+                number: id
+            }, function(err, issue) {
+                if (err) {
+                    bot.botkit.log('Failed to request of GitHub API:', err);
+                    if (err.code == '404') {
+                        //var reply_with_attachments = {
+                        //    'username': 'Pull Request',
+                        //    'attachments': [
+                        //    {
+                        //        'pretext': 'No such Pull Request... :cry:',
+                        //        'title': sprintf('Issues? (#%d)', id),
+                        //        'title_link': sprintf('https://github.com/%s/%s/pull/%d', user, repo, id),
+                        //        'text': '',
+                        //        'color': '#B52003',
+                        //        'footer': sprintf('%s/%s#%d', user, repo, id),
+                        //        'footer_icon': GITHUB_ICON,
+                        //        'ts': moment().format('X')
+                        //    }
+                        //    ],
+                        //    'icon_emoji': ':octocat:'
+                        //}
+                        bot.reply(message, reply_with_attachments);
+                    } else {
+                        bot.reply(message, sprintf('GitHub API Error: %s', err.toString()));
+                    }
+                    return;
+                }
                 var reply_with_attachments = {
-                    'username': 'P-R',
+                    'username': 'Issue',
                     'attachments': [
                     {
-                        'pretext': 'No such Pull Request... :cry:',
-                        'title': sprintf('Issues? (#%d)', id),
-                        'title_link': sprintf('https://github.com/%s/%s/pull/%d', user, repo, id),
-                        'text': '',
-                        'color': '#B52003',
+                        'pretext': 'This is not a Pull Request... :smile:',
+                        'title': sprintf('%s (#%d)', issue.title, issue.number),
+                        'title_link': issue.html_url,
+                        'text': issue.body,
+                        'color': issue.state === 'open' ? '#67C63D' : '#B52003',
+                        'fields': [
+                        {
+                            'title': 'State',
+                            'value': issue.state,
+                            'short': true,
+                        },
+                        {
+                            'title': 'Closed At',
+                            'value': moment(issue.closed_at).format('YYYY-MM-DD HH:mm:ss Z'),
+                            'short': true,
+                        }
+                        ],
+                        'thumb_url': issue.user.avatar_url,
                         'footer': sprintf('%s/%s#%d', user, repo, id),
                         'footer_icon': GITHUB_ICON,
-                        'ts': moment().format('X')
+                        'ts': moment(issue.created_at).format('X')
                     }
                     ],
                     'icon_emoji': ':octocat:'
                 }
                 bot.reply(message, reply_with_attachments);
-            } else {
-                bot.reply(message, sprintf('GitHub API Error: %s', err.toString()));
-            }
+            });
             return;
         }
         if (pr.merged || !pr.mergeable) {
             var reply_with_attachments = {
-                'username': 'P-R',
+                'username': 'Pull Request',
                 'attachments': [
                 {
                     'pretext': 'This Pull Request has been already merged or closed',
@@ -134,7 +173,7 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
         // Merge
         var reply_with_attachments = {
             'text': sprintf('*<%s/files|Diff>*', pr.html_url),
-            'username': 'P-R',
+            'username': 'Pull Request',
             'attachments': [
             {
                 'pretext': 'Are you sure you want to merge? [y/N]',
