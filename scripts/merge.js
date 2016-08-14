@@ -7,6 +7,11 @@ var SLACK_TOKEN = process.env.SLACK_TOKEN;
 var GITHUB_ACCESS_TOKEN = process.env.GITHUB_ACCESS_TOKEN;
 var GITHUB_ICON = 'http://www.freeiconspng.com/uploads/github-logo-icon-0.png'
 
+const COLOR_MERGED    = '#65488D';
+const COLOR_CLOSED    = '#B52003';
+const COLOR_OPEN      = '#67C63D';
+const COLOR_NOT_FOUND = '#D3D3D3';
+
 var controller = botkit.slackbot({
     debug: false
 });
@@ -36,6 +41,87 @@ var pullRequestsMerge = function(bot, message, args) {
     });
 };
 
+var issuesGet = function(bot, message, args) {
+    github.issues.get({
+        user: args.user,
+        repo: args.repo,
+        number: Number(args.id)
+    }, function(err, issue) {
+        if (err) {
+            bot.botkit.log('Failed to request of GitHub API:', err);
+            var reply_with_attachments = {
+                'attachments': [
+                {
+                    'pretext': sprintf('%d %s', err.code, err.status),
+                    'title': sprintf('%s (#%d)', 'No such data', args.id),
+                    'title_link': sprintf('https://github.com/%s/%s', args.user, args.repo),
+                    'color': COLOR_NOT_FOUND,
+                    'footer': 'N/A',
+                    'footer_icon': GITHUB_ICON,
+                    'ts': moment().format('X')
+                }
+                ]
+            }
+            bot.reply(message, reply_with_attachments);
+            return;
+        }
+        var reply_with_attachments = {
+            'attachments': [
+            {
+                'pretext': 'This is not a Pull Request... :sweat_smile:',
+                'title': sprintf('%s (#%d)', issue.title, issue.number),
+                'title_link': issue.html_url,
+                'text': issue.body,
+                'color': issue.state === 'open' ? COLOR_OPEN : COLOR_CLOSED,
+                'fields': [
+                {
+                    'title': 'State',
+                    'value': issue.state,
+                    'short': true,
+                },
+                {
+                    'title': 'Closed At',
+                    'value':issue.state === 'open' ? 'N/A' : moment(issue.closed_at).format('YYYY-MM-DD HH:mm:ss Z'),
+                    'short': true,
+                }
+                ],
+                'thumb_url': issue.user.avatar_url,
+                'footer': sprintf('%s/%s#%d', args.user, args.repo, args.id),
+                'footer_icon': GITHUB_ICON,
+                'ts': moment(issue.created_at).format('X')
+            }
+            ]
+        }
+        bot.reply(message, reply_with_attachments);
+    })
+};
+
+var diffUpload = function(bot, message, args) {
+    var request = require('request');
+    var options = {
+        url: args.pr.diff_url,
+    };
+    request.get(options, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+            var messageObj = {
+                token: SLACK_TOKEN,
+                content: body,
+                filetype: 'diff',
+                filename: sprintf('diff-%d.txt', args.pr.number),
+                title: args.pr.title,
+                channels: message.channel
+            };
+            bot.api.files.upload(messageObj, function(err, res){
+                if (err) {
+                    bot.botkit.log('Failed to request of GitHub API:', err);
+                }
+            });
+        } else {
+            bot.botkit.log('error: '+ response.statusCode);
+        }
+    })
+};
+
 controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot, message) {
     var matches = message.text.match(/^merge +(.+)\/(.+) +([0-9]+)$/i);
     var user = matches[1];
@@ -48,79 +134,22 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
         number: id
     }, function(err, pr) {
         if (err) {
-            github.issues.get({
+            issuesGet(bot, message, {
                 user: user,
                 repo: repo,
-                number: id
-            }, function(err, issue) {
-                if (err) {
-                    bot.botkit.log('Failed to request of GitHub API:', err);
-                    if (err.code == '404') {
-                        //var reply_with_attachments = {
-                        //    'username': 'Pull Request',
-                        //    'attachments': [
-                        //    {
-                        //        'pretext': 'No such Pull Request... :cry:',
-                        //        'title': sprintf('Issues? (#%d)', id),
-                        //        'title_link': sprintf('https://github.com/%s/%s/pull/%d', user, repo, id),
-                        //        'text': '',
-                        //        'color': '#B52003',
-                        //        'footer': sprintf('%s/%s#%d', user, repo, id),
-                        //        'footer_icon': GITHUB_ICON,
-                        //        'ts': moment().format('X')
-                        //    }
-                        //    ],
-                        //    'icon_emoji': ':octocat:'
-                        //}
-                        bot.reply(message, reply_with_attachments);
-                    } else {
-                        bot.reply(message, sprintf('GitHub API Error: %s', err.toString()));
-                    }
-                    return;
-                }
-                var reply_with_attachments = {
-                    'username': 'Issue',
-                    'attachments': [
-                    {
-                        'pretext': 'This is not a Pull Request... :smile:',
-                        'title': sprintf('%s (#%d)', issue.title, issue.number),
-                        'title_link': issue.html_url,
-                        'text': issue.body,
-                        'color': issue.state === 'open' ? '#67C63D' : '#B52003',
-                        'fields': [
-                        {
-                            'title': 'State',
-                            'value': issue.state,
-                            'short': true,
-                        },
-                        {
-                            'title': 'Closed At',
-                            'value': moment(issue.closed_at).format('YYYY-MM-DD HH:mm:ss Z'),
-                            'short': true,
-                        }
-                        ],
-                        'thumb_url': issue.user.avatar_url,
-                        'footer': sprintf('%s/%s#%d', user, repo, id),
-                        'footer_icon': GITHUB_ICON,
-                        'ts': moment(issue.created_at).format('X')
-                    }
-                    ],
-                    'icon_emoji': ':octocat:'
-                }
-                bot.reply(message, reply_with_attachments);
+                id:   id
             });
             return;
         }
         if (pr.merged || !pr.mergeable) {
             var reply_with_attachments = {
-                'username': 'Pull Request',
                 'attachments': [
                 {
                     'pretext': 'This Pull Request has been already merged or closed',
                     'title': sprintf('%s (#%d)', pr.title, pr.number),
                     'title_link': pr.html_url,
                     'text': pr.body,
-                    'color': '#65488D',
+                    'color': COLOR_MERGED,
                     'fields': [
                     {
                         'title': 'State',
@@ -138,49 +167,29 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
                     'footer_icon': GITHUB_ICON,
                     'ts': moment(pr.created_at).format('X')
                 }
-                ],
-                'icon_emoji': ':octocat:'
+                ]
             }
             bot.reply(message, reply_with_attachments);
             return;
         }
 
         // Diff
-        var request = require('request');
-        var options = {
-            url: pr.diff_url,
-        };
-        request.get(options, function (error, response, body) {
-            if (!error && response.statusCode == 200) {
-                var messageObj = {
-                    token: SLACK_TOKEN,
-                    content: body,
-                    filetype: 'diff',
-                    filename: sprintf('diff-%d.txt', pr.number),
-                    title: pr.title,
-                    channels: message.channel
-                };
-                bot.api.files.upload(messageObj, function(err, res){
-                    if (err) {
-                        console.log(err);
-                    }
-                });
-            } else {
-                console.log('error: '+ response.statusCode);
-            }
-        })
-
+        diffUpload(bot, message, {
+            user: user,
+            repo: repo,
+            id:   id,
+            pr:   pr
+        });
         // Merge
         var reply_with_attachments = {
             'text': sprintf('*<%s/files|Diff>*', pr.html_url),
-            'username': 'Pull Request',
             'attachments': [
             {
                 'pretext': 'Are you sure you want to merge? [y/N]',
                 'title': sprintf('%s (#%d)', pr.title, pr.number),
                 'title_link': pr.html_url,
                 'text': pr.body,
-                'color': '#67C63D',
+                'color': COLOR_OPEN,
                 'fields': [
                 {
                     'title': 'commits',
@@ -198,8 +207,7 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
                 'footer_icon': GITHUB_ICON,
                 'ts': moment(pr.created_at).format('X')
             }
-            ],
-            'icon_emoji': ':octocat:'
+            ]
         }
         bot.startConversation(message, function(err,convo) {
             convo.ask(reply_with_attachments, [{
