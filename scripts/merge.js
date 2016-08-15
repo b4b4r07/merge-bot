@@ -122,6 +122,74 @@ var diffUpload = function(bot, message, args) {
     })
 };
 
+var pullRequestsConflicts = function(bot, message, args) {
+    var reply_with_attachments = {
+        'attachments': [
+        {
+            'pretext': 'This branch has conflicts that must be resolved',
+            'title': sprintf('%s (#%d)', args.pr.title, args.pr.number),
+            'title_link': args.pr.html_url,
+            'text': args.pr.body,
+            'color': COLOR_NOT_FOUND,
+            'fields': [
+            {
+                'title': 'State',
+                'value': args.pr.state,
+                'short': true,
+            }
+            ],
+            'thumb_url': args.pr.user.avatar_url,
+            'footer': sprintf('%s/%s#%d', args.user, args.repo, args.id),
+            'footer_icon': GITHUB_ICON,
+            'ts': moment(args.pr.created_at).format('X')
+        }
+        ]
+    }
+    bot.reply(message, reply_with_attachments);
+}
+
+var pullRequestsAlreadyMerged = function(bot, message, args) {
+    if (args.pr.merged) {
+        var color = COLOR_MERGED;
+        var pretext = 'This Pull Request has been already merged';
+        var f_title = 'Merged At';
+        var f_value = moment(args.pr.merged_at).format('YYYY-MM-DD HH:mm:ss Z')
+    } else {
+        var color = COLOR_CLOSED;
+        var pretext = 'This Pull Request has been already closed';
+        var f_title = 'Closed At';
+        var f_value = moment(args.pr.closed_at).format('YYYY-MM-DD HH:mm:ss Z')
+    }
+    var reply_with_attachments = {
+        'attachments': [
+        {
+            'pretext': pretext,
+            'title': sprintf('%s (#%d)', args.pr.title, args.pr.number),
+            'title_link': args.pr.html_url,
+            'text': args.pr.body,
+            'color': color,
+            'fields': [
+            {
+                'title': 'State',
+                'value': args.pr.state,
+                'short': true,
+            },
+            {
+                'title': f_title,
+                'value': f_value,
+                'short': true,
+            }
+            ],
+            'thumb_url': args.pr.user.avatar_url,
+            'footer': sprintf('%s/%s#%d', args.user, args.repo, args.id),
+            'footer_icon': GITHUB_ICON,
+            'ts': moment(args.pr.created_at).format('X')
+        }
+        ]
+    }
+    bot.reply(message, reply_with_attachments);
+}
+
 controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot, message) {
     var matches = message.text.match(/^merge +(.+)\/(.+) +([0-9]+)$/i);
     var user = matches[1];
@@ -133,7 +201,9 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
         repo: repo,
         number: id
     }, function(err, pr) {
+        // Issues
         if (err) {
+            // 404 Not Found
             issuesGet(bot, message, {
                 user: user,
                 repo: repo,
@@ -141,45 +211,42 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
             });
             return;
         }
-        if (pr.merged || !pr.mergeable) {
-            var reply_with_attachments = {
-                'attachments': [
-                {
-                    'pretext': 'This Pull Request has been already merged or closed',
-                    'title': sprintf('%s (#%d)', pr.title, pr.number),
-                    'title_link': pr.html_url,
-                    'text': pr.body,
-                    'color': COLOR_MERGED,
-                    'fields': [
-                    {
-                        'title': 'State',
-                        'value': pr.state,
-                        'short': true,
-                    },
-                    {
-                        'title': 'Merged At',
-                        'value': moment(pr.merged_at).format('YYYY-MM-DD HH:mm:ss Z'),
-                        'short': true,
-                    }
-                    ],
-                    'thumb_url': pr.user.avatar_url,
-                    'footer': sprintf('%s/%s#%d', user, repo, id),
-                    'footer_icon': GITHUB_ICON,
-                    'ts': moment(pr.created_at).format('X')
-                }
-                ]
-            }
-            bot.reply(message, reply_with_attachments);
+
+        // Already Closed or Merged
+        if (pr.state === 'closed') {
+            pullRequestsAlreadyMerged(bot, message, {
+                user: user,
+                repo: repo,
+                id:   id,
+                pr:   pr
+            });
+            return;
+        }
+        // Conflicts
+        if (pr.state === 'open' && !pr.mergeable) {
+            pullRequestsConflicts(bot, message, {
+                user: user,
+                repo: repo,
+                id:   id,
+                pr:   pr
+            });
             return;
         }
 
-        // Diff
+        /*
+         *
+         * Mergeable pattern
+         *
+         */
+
+        // Upload diff snippet
         diffUpload(bot, message, {
             user: user,
             repo: repo,
             id:   id,
             pr:   pr
         });
+
         // Merge
         var reply_with_attachments = {
             'text': sprintf('*<%s/files|Diff>*', pr.html_url),
@@ -238,7 +305,15 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
 
                     convo.next();
                 }
-            }]);
+            }, {
+                    default: true,
+                    callback: function(response, convo) {
+                        convo.say('Please say YES or NO');
+                        convo.repeat();
+                        convo.next();
+                    }
+                }
+            ]);
         });
     });
 });
