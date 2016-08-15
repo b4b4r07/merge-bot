@@ -136,11 +136,6 @@ var pullRequestsConflicts = function(bot, message, args) {
                 'title': 'State',
                 'value': args.pr.state,
                 'short': true,
-            },
-            {
-                'title': 'Merged At',
-                'value': moment(args.pr.merged_at).format('YYYY-MM-DD HH:mm:ss Z'),
-                'short': true,
             }
             ],
             'thumb_url': args.pr.user.avatar_url,
@@ -156,13 +151,19 @@ var pullRequestsConflicts = function(bot, message, args) {
 var pullRequestsAlreadyMerged = function(bot, message, args) {
     if (args.pr.merged) {
         var color = COLOR_MERGED;
+        var pretext = 'This Pull Request has been already merged';
+        var f_title = 'Merged At';
+        var f_value = moment(args.pr.merged_at).format('YYYY-MM-DD HH:mm:ss Z')
     } else {
         var color = COLOR_CLOSED;
+        var pretext = 'This Pull Request has been already closed';
+        var f_title = 'Closed At';
+        var f_value = moment(args.pr.closed_at).format('YYYY-MM-DD HH:mm:ss Z')
     }
     var reply_with_attachments = {
         'attachments': [
         {
-            'pretext': 'This Pull Request has been already merged',
+            'pretext': pretext,
             'title': sprintf('%s (#%d)', args.pr.title, args.pr.number),
             'title_link': args.pr.html_url,
             'text': args.pr.body,
@@ -174,8 +175,8 @@ var pullRequestsAlreadyMerged = function(bot, message, args) {
                 'short': true,
             },
             {
-                'title': 'Merged At',
-                'value': moment(args.pr.merged_at).format('YYYY-MM-DD HH:mm:ss Z'),
+                'title': f_title,
+                'value': f_value,
                 'short': true,
             }
             ],
@@ -200,7 +201,9 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
         repo: repo,
         number: id
     }, function(err, pr) {
+        // Issues
         if (err) {
+            // 404 Not Found
             issuesGet(bot, message, {
                 user: user,
                 repo: repo,
@@ -208,6 +211,7 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
             });
             return;
         }
+
         // Already Closed or Merged
         if (pr.state === 'closed') {
             pullRequestsAlreadyMerged(bot, message, {
@@ -229,7 +233,13 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
             return;
         }
 
-        // Diff
+        /*
+         *
+         * Mergeable pattern
+         *
+         */
+
+        // Upload diff snippet
         diffUpload(bot, message, {
             user: user,
             repo: repo,
