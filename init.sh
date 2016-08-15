@@ -18,10 +18,10 @@ done
 #npm install
 
 case "$1" in
-    start | stop | restart)
+    'start' | 'stop' | 'restart')
         ./node_modules/.bin/forever "$1" ./bin/botkit.js
         ;;
-    "")
+    '')
         printf 'too few arguments\n' >&2
         exit 1
         ;;
