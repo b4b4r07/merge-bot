@@ -207,7 +207,9 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
                 'footer_icon': GITHUB_ICON,
                 'ts': moment(pr.created_at).format('X')
             }
-            ]
+            ],
+            'unfurl_links': false,
+            'unfurl_media': false
         }
         bot.startConversation(message, function(err,convo) {
             convo.ask(reply_with_attachments, [{
