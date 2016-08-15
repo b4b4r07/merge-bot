@@ -8,6 +8,7 @@ if [[ -z $slack_token ]] || [[ -z $github_token ]]; then
     exit 1
 fi
 
+git checkout scripts
 for js in ./scripts/*.js
 do
     perl -pi -e 's/^(var SLACK_TOKEN = )(.+;)$/$1"'$slack_token'";/g' "$js"
@@ -18,15 +19,14 @@ done
 
 case "$1" in
     start | stop | restart)
-        ./node_modules/.bin/forever "$1" bin/botkit.js
+        ./node_modules/.bin/forever "$1" ./bin/botkit.js
         ;;
     "")
-        printf "too few arguments\n" >&2
+        printf 'too few arguments\n' >&2
         exit 1
         ;;
     *)
-        printf "$1: unknown\n" >&2
-        exit 1
+        ./node_modules/.bin/forever "$1"
         ;;
 esac
 
