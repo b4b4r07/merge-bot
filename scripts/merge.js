@@ -1,9 +1,7 @@
 var moment = require('moment');
 var sprintf = require('sprintf');
-var botkit = require('botkit');
 var githubAPI = require('github');
 
-var SLACK_TOKEN = process.env.SLACK_TOKEN;
 var GITHUB_ACCESS_TOKEN = process.env.GITHUB_ACCESS_TOKEN;
 var GITHUB_ICON = 'http://www.freeiconspng.com/uploads/github-logo-icon-0.png'
 
@@ -11,14 +9,6 @@ const COLOR_MERGED    = '#65488D';
 const COLOR_CLOSED    = '#B52003';
 const COLOR_OPEN      = '#67C63D';
 const COLOR_NOT_FOUND = '#D3D3D3';
-
-var controller = botkit.slackbot({
-    debug: false
-});
-
-controller.spawn({
-    token: SLACK_TOKEN
-}).startRTM();
 
 github = new githubAPI({
     version: '3.0.0'
@@ -249,7 +239,7 @@ controller.hears('^merge +(.+)\/(.+) +([0-9]+)$', 'direct_mention', function(bot
 
         // Merge
         var reply_with_attachments = {
-            'text': sprintf('*<%s/files|Diff>*', pr.html_url),
+            'text': sprintf('This Pull Request is mergeable! (*<%s/files|Diff>*)', pr.html_url),
             'attachments': [
             {
                 'pretext': 'Are you sure you want to merge? [y/N]',
