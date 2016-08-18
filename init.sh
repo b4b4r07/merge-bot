@@ -9,7 +9,7 @@ if [[ -z $slack_token ]] || [[ -z $github_token ]]; then
 fi
 
 git checkout scripts
-for js in ./scripts/*.js
+for js in ./scripts/*.js ./bin/*.js
 do
     perl -pi -e 's/^(var SLACK_TOKEN = ).+;$/$1"'$slack_token'";/g' "$js"
     perl -pi -e 's/^(var GITHUB_ACCESS_TOKEN = ).+;$/$1"'$github_token'";/g' "$js"

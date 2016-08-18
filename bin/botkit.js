@@ -6,8 +6,9 @@ controller = Botkit.slackbot({
   debug: false
 });
 
+var SLACK_TOKEN = process.env.SLACK_TOKEN;
 controller.spawn({
-  token: process.env.SLACK_TOKEN
+  token: SLACK_TOKEN
 }).startRTM();
 
 var load = function(path, file) {
